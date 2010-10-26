@@ -1,0 +1,9 @@
+For images without a grid, I found common points or features between the
+original image, and a map with known coordinates. My workflow (mainly because
+QuantumGIS was too slow at displaying images) was to trace around points on the
+map in Inkscape adding nodes that form a path at feature points in order, and
+also clicking the matching points from a map in libchamplain. I use the SVG path
+which can be obtained from the XML viewer in Inkscape along with a modified
+launcher-gtk using libchamplain to generate the two strings of coordinates.
+
+svg-coord2gcps.pl takes them and patches them into a .points file.
