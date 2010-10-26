@@ -1,0 +1,11 @@
+This repository contains a bunch of scripts I've been using to help automate
+georeferencing some digitised old paper maps.
+
+There are two main work flows I've been using so far.
+ 1. from-map-grid was used for maps that have a grid drawn on them.
+ 2. from-gcps was used for maps which have no grid drawn on them.
+
+The third folder "common" is for the common scripts, that can be used from
+the output of either of the above two approaches.
+
+More details can be found in each of the folders.

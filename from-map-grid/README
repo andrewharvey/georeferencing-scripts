@@ -1,0 +1,29 @@
+For the maps that had a grid on them like as shown in sample_original.jpg I used
+Inkscape to trace the lines of latitude and label these paths with the
+coordinates of these lines. I then used the perl script to generate a .points
+file which contains all the ground control points (GCPs) from the tracing.
+
+The script is very unstable and it may not warn when things are going wrong, so
+if you use it, use it with caution.
+
+Basically my work flow was,
+
+1. I opened the original map in Inkscape,
+2. then using the tool to draw straight multi-segment lines,
+3. for each line of latitude (horizontal line), going from left to right, I
+4.   added a node in the line at each intersection with a line of longitude
+     (vertical line). No lines of longitude are skipped, if you need to skip one
+     end the line, then start a new line segment. That horizontal path is then
+     named with an id of lat${lat}_lon${startLon-endLon}. Then -endLon is
+     optional and if omitted only the first point in the line is used.
+
+See the sample_traced.svg file for an example.
+
+The next step is to run extract-coords.pl on this SVG file. This should
+(remember the script is not robust) give you a GCP file which is a set of
+control points that relates positions on the raster image to georeferenced
+coordinates.
+
+If extract-coords.pl gives you any error messages or warnings, anything in
+addition to the "Found n GCPs." then there was a problem, probably with your
+labelling of the paths.

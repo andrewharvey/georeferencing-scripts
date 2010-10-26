@@ -1,0 +1,18 @@
+gcp2gdalscript.pl takes a set of GCPs as a .points file along with the original
+raster and creates a shell script with a bunch of gdal commands to actually
+warp the image and produce a bunch of other metadata files. Run the perl script
+with no arguments to see the usage hint.
+
+gdalinfo2kml.pl takes a .gdalinfo file created by gcp2gdalscript.pl and
+reformats it into a KML file so you can see the warped images in a product that
+supports KML GroundOverlays.
+
+Don't ask me why I made the gcp2gdalscript.pl script write a shell script
+instead of just having perl run those commands when you run the perl script. I
+wasn't really thinking when I started and one thing lead to another. I may
+refactor it later, but it seems to be working okay for now.
+
+Its comforting to know that I'm not the only one constructing strings for
+passing to the gdal suit, rather than directly calling the GDAL API. From
+browsing through the mapwarper code http://github.com/timwaters/mapwarper/ it
+seems to do it too.
