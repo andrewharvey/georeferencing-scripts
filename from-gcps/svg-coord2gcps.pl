@@ -29,14 +29,22 @@ my $coordinates_string = $ARGV[1];
 open GCP, ">".$ARGV[2] or die("Cannot write to ".$ARGV[2]."\n");
 print GCP "mapX,mapY,pixelX,pixelY,enable\n";
 
-$svg_path =~ s/^\D\ //; #get rid of any 'm ' at the start
-$svg_path =~ s/\s+\D\s+/ /; #eg. if we have some letters in the string. they have some special meaning for the SVG path, but we don't care.
+$svg_path =~ s/^(\D)\ ?//; #get rid of any 'm ' at the start
+my $abs = ($1 =~ /[A-Z]/); #M means absolute, m means relative
+$svg_path =~ s/\s+(\D)\s+/ /; #eg. if we have some letters in the string. they have some special meaning for the SVG path, but we don't care.
+die "dieing... relative coordinates mixed in with absolute coordinates.\n" if ((defined $1) && ($1 =~ /[a-z]/) && ($abs));
 my @image_points = split / /, $svg_path; #put the image points into an array
 
 my @geo_points = split / /, $coordinates_string; #put the geo points into an array
 
 if (scalar @image_points != scalar @geo_points) {
     die "svg_path has ",scalar @image_points," points, but coordinates_string has ",scalar @geo_points," points.\n";
+}
+
+if ($abs) {
+    print "Path coordinates are absolute.\n";
+}else{
+    print "Path coordinates are relative.\n";
 }
 
 my $lastix = 0;
@@ -50,8 +58,10 @@ for (my $i = 0; $i < scalar @image_points; $i++) {
     print $ix,",",$iy," maps to ",$gx,",",$gy,"\n" if ($debug);
     print GCP "$gx,$gy,$ix,$iy,1\n";
 
-    $lastix = $ix;
-    $lastiy = $iy;
+    if (!$abs) {
+        $lastix = $ix;
+        $lastiy = $iy;
+    }
 }
 
 close GCP;
