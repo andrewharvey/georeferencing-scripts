@@ -7,6 +7,22 @@ gdalinfo2kml.pl takes a .gdalinfo file created by gcp2gdalscript.pl and
 reformats it into a KML file so you can see the warped images in a product that
 supports KML GroundOverlays.
 
+You can convert the warped rasters into an OSM slippy map tile structure using,
+
+   gdal2tiles.py --profile='mercator' --s_srs='WGS84' warped_jpg_with_wld_file tile_output/
+
+, followed by a (in the tile_output directory) (see http://groups.google.com/group/maptiler/browse_thread/thread/aa89fc726b8f7261/8bdc39d7829cc80c
+),
+
+   for I in `find . -type f -maxdepth 3 -mindepth 2 -name *.png`
+    do OLDNAME=`basename $I .png`
+    DIRNAME=`dirname $I`
+    SEP1=${I#./}
+    SEP2=${SEP1%%/*}
+    NEWNAME=$((2**$SEP2-$OLDNAME-1))
+    mv "$I" "$DIRNAME"/"$NEWNAME.png"
+   done 
+
 Don't ask me why I made the gcp2gdalscript.pl script write a shell script
 instead of just having perl run those commands when you run the perl script. I
 wasn't really thinking when I started and one thing lead to another. I may
