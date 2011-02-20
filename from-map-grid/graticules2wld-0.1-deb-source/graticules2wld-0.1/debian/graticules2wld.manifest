@@ -1,0 +1,3 @@
+usr/share/graticules2wld/graticules2wld.jar:
+ Main-Class: graticules2wld.Main
+ Debian-Java-Home: /usr/lib/jvm/default-java

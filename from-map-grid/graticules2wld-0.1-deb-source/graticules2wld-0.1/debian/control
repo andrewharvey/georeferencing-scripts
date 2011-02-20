@@ -1,0 +1,14 @@
+Source: graticules2wld
+Priority: extra
+Maintainer: Andrew Harvey <andrew.harvey4@gmail.com>
+Build-Depends: debhelper (>= 7.0.50~), javahelper (>=0.25)
+Build-Depends-Indep: default-jdk, libcommons-math-java, libcommons-cli-java
+Standards-Version: 3.9.0
+Section: science
+
+Package: graticules2wld
+Architecture: all
+Depends: ${java:Depends}, ${misc:Depends}
+Recommends: ${java:Recommends}
+Description: Transforms Vector Graticules to World File
+ Transforms image space vector graticules into a world file for the same image.

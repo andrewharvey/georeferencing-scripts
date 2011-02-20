@@ -1,3 +1,9 @@
+= Georeferencing from Graticules =
+
+== 1. Georeferencing via adding GCPs at each graticule intersection ==
+
+Using extract-coords.pl.
+
 For the maps that had a grid on them like as shown in sample_original.jpg I used
 Inkscape to trace the lines of latitude and label these paths with the
 coordinates of these lines. I then used the perl script to generate a .points
@@ -27,3 +33,30 @@ coordinates.
 If extract-coords.pl gives you any error messages or warnings, anything in
 addition to the "Found n GCPs." then there was a problem, probably with your
 labelling of the paths.
+
+
+== 2. Georeferencing via tracing graticules using intersection points as GCPs ==
+
+pmapgrid2gcps.pl is designed to take a specially crafted SVG file and make a CGP
+file for GDAL using the intersection points of the traced graticules.
+
+The SVG file should consist of paths with two nodes per path which trace the
+graticules. The path id should be the label on the parish map. eg. "w220" or
+"s400". In the case of zero, use either n0 or s0 for horizontal graticules or
+e0 or w0 for vertical graticules.
+
+This script will find the intersection of these lines and output those points of
+intersection as GCPs.
+
+
+== 3. Georeferencing via tracing graticules to form a World File ==
+
+The java program in graticules2wld is designed to, rather than outputing the
+intersection points as GCPs, find a kind of "best-fit" construction of a World
+File (affine transformation from image coordinate space into world projected
+coordinates).
+
+To abstract the details of reading the SVG files from the graticules2wld
+program, it reads an intermediate format which pmap-svggraticules2csv.pl will
+create from the source SVG files.
+

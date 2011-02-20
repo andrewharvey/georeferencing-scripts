@@ -1,0 +1,11 @@
+#!/usr/bin/make -f
+
+export JAVA_HOME=/usr/lib/jvm/default-java
+
+# Put depended upon jars in here
+# export CLASSPATH=
+export CLASSPATH=/usr/share/java/commons-math.jar:/usr/share/java/commons-cli.jar:/usr/share/java/junit4.jar
+
+%:
+	dh --with javahelper $@
+
