@@ -98,11 +98,11 @@ foreach my $node ($nodeset->get_nodelist) {
 
     my $direction;
     my $value;
-    if ($id =~ /([nsewvh])(\d+)/i) {
+    if ($id =~ /^([nsewvh])(\d+)$/i) {
         $direction = $1;
         $value = $2;
     }else{
-        print STDERR "ERR: did not match $id.\n";
+        print STDERR "WARNING: found a path in svg with id $id.\n";
         next;
     }
 
@@ -114,8 +114,8 @@ foreach my $node ($nodeset->get_nodelist) {
 
     my $num_expected_points = 2;
     if (@points != $num_expected_points) {
-        print STDERR "'$id': expecting ", $num_expected_points, " points, but found ",scalar @points,".\n";
-        print STDERR " @points\n";
+        print STDERR "WARNING: path '$id' expecting ", $num_expected_points, " points, but found ",scalar @points,".\n";
+        print STDERR "   @points\n";
         next;
     }
 

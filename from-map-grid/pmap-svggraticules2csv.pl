@@ -53,11 +53,11 @@ foreach my $node ($nodeset->get_nodelist) {
 
     my $direction;
     my $value;
-    if ($id =~ /([nsewvh])(\d+)/i) {
+    if ($id =~ /^([nsewvh])(\d+)$/i) {
         $direction = $1;
         $value = $2;
     }else{
-        print STDERR "ERR: did not match $id.\n";
+        print STDERR "WARNING: found a path in svg with id $id.\n";
         next;
     }
 
@@ -67,10 +67,11 @@ foreach my $node ($nodeset->get_nodelist) {
     $d =~ s/\s+\D\s+/ /; #eg. if we have some letters in the string. they have some special meaning for the SVG path, but we don't care.
     my @points = split / /, $d; #put the points into an array
 
+    # the svg paths should be line segments, not polylines
     my $num_expected_points = 2;
     if (@points != $num_expected_points) {
-        print STDERR "'$id': expecting ", $num_expected_points, " points, but found ",scalar @points,".\n";
-        print STDERR " @points\n";
+        print STDERR "WARNING: path '$id' expecting ", $num_expected_points, " points, but found ",scalar @points,".\n";
+        print STDERR "   @points\n";
         next;
     }
 
@@ -97,7 +98,7 @@ close CSV;
 print "Found ", $lat_count, " horizontal lines, and ", $lon_count, " vertical lines.\n";
 
 if (($lat_count < 2) || ($lon_count < 2)) {
-    print "Warning: You need at least two horizontal and two vertical graticules for\ncreation of a world file.\n";
+    print STDERR "WARNING: You need at least two horizontal and two vertical graticules for\ncreation of a world file.\n";
     exit 1; # EXIT_FAILURE
 }
 
