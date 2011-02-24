@@ -41,7 +41,7 @@ my $xp = XML::XPath->new(filename => $ARGV[0]);
 
 my $nodeset = $xp->find('/svg/path'); # find all paths
 
-my ($lat_count, $lon_count);
+my ($lat_count, $lon_count) = (0, 0);
 
 print CSV "lonlat,dir,value,x1,y1,x2,y2\n";
 
@@ -80,7 +80,7 @@ foreach my $node ($nodeset->get_nodelist) {
         $x2 += $x1;
         $y2 += $y1;
     }
-    
+
     my @line = ($direction, $value, $x1, $y1, $x2, $y2);
     if ($direction =~ /^[nsh]$/i) {
         print CSV "lat,";
@@ -92,7 +92,12 @@ foreach my $node ($nodeset->get_nodelist) {
     print CSV "$direction,$value,$x1,$y1,$x2,$y2\n";
 }
 
+close CSV;
+
 print "Found ", $lat_count, " horizontal lines, and ", $lon_count, " vertical lines.\n";
 
-close CSV;
+if (($lat_count < 2) || ($lon_count < 2)) {
+    print "Warning: You need at least two horizontal and two vertical graticules for\ncreation of a world file.\n";
+    exit 1; # EXIT_FAILURE
+}
 
