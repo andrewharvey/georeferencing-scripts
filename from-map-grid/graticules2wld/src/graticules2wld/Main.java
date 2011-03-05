@@ -55,9 +55,10 @@ import java.util.Collections;
 
 import org.apache.commons.cli.*;
 import org.apache.commons.math.stat.descriptive.DescriptiveStatistics;
+import org.apache.commons.math.stat.regression.SimpleRegression;
 
 public class Main {
-	
+
 	static double unitsToMeters = 1; // use 1/20.1168 for chains
 	static boolean debug = false;
 
@@ -66,7 +67,7 @@ public class Main {
 	 * @throws Exception
 	 */
 	public static void main(String[] args) throws Exception {
-		
+
 		/* parse the command line arguments */
 		// create the command line parser
 		CommandLineParser parser = new PosixParser();
@@ -78,54 +79,54 @@ public class Main {
 		options.addOption("u", "tometers", true, "multiplication factor to get source units into meters");
 		options.addOption("h", "help", false, "prints this usage page");
 		options.addOption("d", "debug", false, "prints debugging information to stdout");
-		
-        double originNorthing = 0;
-        double originEasting = 0;
-        
-        String inputFileName = null;
-        String outputFileName = null;
+
+		double originNorthing = 0;
+		double originEasting = 0;
+
+		String inputFileName = null;
+		String outputFileName = null;
 
 		try {
-		    // parse the command line arguments
-		    CommandLine line = parser.parse( options, args );
-		    
-		    if (line.hasOption("help"))
-		    	printUsage(0); // print usage then exit using a non error exit status
-		    
-		    if (line.hasOption("debug"))
-		    	debug = true;
-		    
-		    // these arguments are required
-		    if (!line.hasOption("originy") || !line.hasOption("originx"))
-		    	printUsage(1);
-		    
-		    originNorthing = Double.parseDouble(line.getOptionValue("originy"));
-		    originEasting = Double.parseDouble(line.getOptionValue("originx"));
-		    
-		    if (line.hasOption("tometers"))
-		    	unitsToMeters = Double.parseDouble(line.getOptionValue("tometers"));
-		    
-		    // two args should be left. the input csv file name and the output wld file name.
+			// parse the command line arguments
+			CommandLine line = parser.parse( options, args );
+
+			if (line.hasOption("help"))
+				printUsage(0); // print usage then exit using a non error exit status
+
+			if (line.hasOption("debug"))
+				debug = true;
+
+			// these arguments are required
+			if (!line.hasOption("originy") || !line.hasOption("originx"))
+				printUsage(1);
+
+			originNorthing = Double.parseDouble(line.getOptionValue("originy"));
+			originEasting = Double.parseDouble(line.getOptionValue("originx"));
+
+			if (line.hasOption("tometers"))
+				unitsToMeters = Double.parseDouble(line.getOptionValue("tometers"));
+
+			// two args should be left. the input csv file name and the output wld file name.
 			String[] iofiles = line.getArgs();
 			if (iofiles.length < 2) {
 				printUsage(1);
 			}
-			
+
 			inputFileName = iofiles[0];
 			outputFileName = iofiles[1];
 		}
 		catch( ParseException exp ) {
-		    System.err.println( "Unexpected exception:" + exp.getMessage() );
-		    System.exit(1);
+			System.err.println( "Unexpected exception:" + exp.getMessage() );
+			System.exit(1);
 		}
-		
+
 		// try to open the input file for reading and the output file for writing
 		File graticulesCsvFile;
 		BufferedReader csvReader = null;
-		
+
 		File wldFile;
-        BufferedWriter wldWriter = null;
-        
+		BufferedWriter wldWriter = null;
+
 		try {
 			graticulesCsvFile = new File(inputFileName);
 			csvReader = new BufferedReader(new FileReader(graticulesCsvFile));
@@ -133,175 +134,187 @@ public class Main {
 			System.err.println("Could not open input file for reading: " + inputFileName);
 			System.exit(1);
 		}
-		
+
 		try {
 			wldFile = new File(outputFileName);
-        	wldWriter = new BufferedWriter(new FileWriter(wldFile));
+			wldWriter = new BufferedWriter(new FileWriter(wldFile));
 		}catch( IOException exp ) {
 			System.err.println("Could not open output file for writing: " + outputFileName);
 			System.exit(1);
 		}
+
+		// list of lon graticules and lat graticules
+		ArrayList<Graticule> lonGrats = new ArrayList<Graticule>();
+		ArrayList<Graticule> latGrats = new ArrayList<Graticule>();
+
+		// read the source CSV and convert its information into the two ArrayList<Graticule> data structures
+		readCSV(csvReader, lonGrats, latGrats);
+
+		// we now need to start finding the world file paramaters
+		DescriptiveStatistics stats = new DescriptiveStatistics();
+
+		// find theta and phi
+		for (Graticule g : latGrats) {
+			stats.addValue(g.angle());
+		}
+
+		double theta = stats.getMean(); // we use the mean of the lat angles as theta
+		if (debug)
+			System.out.println("theta range = " +  Math.toDegrees(stats.getMax() - stats.getMin()));
+		stats.clear();
+
+		for (Graticule g : lonGrats) {
+			stats.addValue(g.angle());
+		}
+
+		double phi = stats.getMean(); // ... and the mean of the lon angles for phi
+		if (debug)
+			System.out.println("phi range = " +  Math.toDegrees(stats.getMax() - stats.getMin()));
+		stats.clear();
+
+		// print these if in debug mode
+		if (debug) {
+			System.out.println("theta = " + Math.toDegrees(theta) + "deg");
+			System.out.println("phi = " + Math.toDegrees(phi) + "deg");
+		}
+
+
+		// find x and y (distance beteen pixels in map units)
+		Collections.sort(latGrats);
+		Collections.sort(lonGrats);
+		int prevMapValue = 0; //fixme: how to stop warning about not being initilised?
+		Line2D prevGratPixelSys = new Line2D.Double();
+
+		boolean first = true;
+		for (Graticule g : latGrats) {
+			if (!first) {
+				int deltaMapValue = Math.abs(g.realValue() - prevMapValue);
+				double deltaPixelValue = (g.l.ptLineDist(prevGratPixelSys.getP1()) + (g.l.ptLineDist(prevGratPixelSys.getP2()))) / 2;
+
+				double delta = deltaMapValue / deltaPixelValue;
+				stats.addValue(delta);
+			}else{
+				first = false;
+				prevMapValue = g.realValue();
+				prevGratPixelSys = (Line2D) g.l.clone();
+			}
+		}
+
+		double y = stats.getMean();
+		if (debug)
+			System.out.println("y range = " + (stats.getMax() - stats.getMin()));
+		stats.clear();
+
+		first = true;
+		for (Graticule g : lonGrats) {
+			if (!first) {
+				int deltaMapValue = g.realValue() - prevMapValue;
+				double deltaPixelValue = (g.l.ptLineDist(prevGratPixelSys.getP1()) + (g.l.ptLineDist(prevGratPixelSys.getP2()))) / 2;
+
+				double delta = deltaMapValue / deltaPixelValue;
+				stats.addValue(delta);
+			}else{
+				first = false;
+				prevMapValue = g.realValue();
+				prevGratPixelSys = (Line2D) g.l.clone();
+			}
+		}
+
+		double x = stats.getMean();
+		if (debug)
+			System.out.println("x range = " + (stats.getMax() - stats.getMin()));
+		stats.clear();
+
+		if (debug) {
+			System.out.println("x = " + x);
+			System.out.println("y = " + y);
+		}
+
+		SimpleRegression regression = new SimpleRegression();
+
+		// C, F are translation terms: x, y map coordinates of the center of the upper-left pixel
+		for (Graticule g : latGrats) {
+			// find perp dist to pixel space 0,0
+			Double perpPixelDist = g.l.ptLineDist(new Point2D.Double(0,0));
+
+			// find the map space distance from this graticule to the center of the 0,0 pixel
+			Double perpMapDist = perpPixelDist * y; // perpMapDist / perpPixelDist = y
+
+			regression.addData(perpMapDist, g.realValue());
+		}
+
+		double F = regression.getIntercept();
+		regression.clear();
+
+		for (Graticule g : lonGrats) {
+			// find perp dist to pixel space 0,0
+			Double perpPixelDist = g.l.ptLineDist(new Point2D.Double(0,0));
+
+			// find the map space distance from this graticule to the center of the 0,0 pixel
+			Double perpMapDist = perpPixelDist * x; // perpMapDist / perpPixelDist = x
+
+			regression.addData(perpMapDist, g.realValue());
+		}
+
+		double C = regression.getIntercept();
+		regression.clear();
 		
-        // list of lon graticules and lat graticules
-        ArrayList<Graticule> lonGrats = new ArrayList<Graticule>();
-        ArrayList<Graticule> latGrats = new ArrayList<Graticule>();
-        
-        // read the source CSV and convert its information into the two ArrayList<Graticule> data structures
-        readCSV(csvReader, lonGrats, latGrats);
+		if (debug) {
+			System.out.println("Upper Left pixel has coordinates " + C + ", " + F);
+		}
 
-        // we now need to start finding the world file paramaters
-        DescriptiveStatistics stats = new DescriptiveStatistics();
+		// convert to meters
+		C *= unitsToMeters;
+		F *= unitsToMeters;
 
-        // find theta and phi
-        for (Graticule g : latGrats) {
-        	stats.addValue(g.angle());
-        }
+		// C,F store the projected (in map units) coordinates of the upper left pixel.
+		// originNorthing,originEasting is the offset we need to apply to 0,0 to push the offsets into our global coordinate system 
+		C = originEasting + C;
+		F = originNorthing + F;
 
-        double theta = stats.getMean(); // we use the mean of the lat angles as theta
-        if (debug)
-        	System.out.println("theta range = " +  Math.toDegrees(stats.getMax() - stats.getMin()));
-        stats.clear();
 
-        for (Graticule g : lonGrats) {
-        	stats.addValue(g.angle());
-        }
+		// calculate the affine transformation matrix elements
+		double D = -1 * x * unitsToMeters * Math.sin(theta);
+		double A = x * unitsToMeters * Math.cos(theta);
+		double B = y * unitsToMeters * Math.sin(phi); // if should be negative, it'll formed by negative sin
+		double E = -1 * y * unitsToMeters * Math.cos(phi);
 
-        double phi = stats.getMean(); // ... and the mean of the lon angles for phi
-        if (debug)
-        	System.out.println("phi range = " +  Math.toDegrees(stats.getMax() - stats.getMin()));
-        stats.clear();
-        
-        // print these if in debug mode
-        if (debug) {
-        	System.out.println("theta = " + Math.toDegrees(theta) + "deg");
-        	System.out.println("phi = " + Math.toDegrees(phi) + "deg");
-        }
-        
-        
-        // find x and y (distance beteen pixels in map units)
-        Collections.sort(latGrats);
-        Collections.sort(lonGrats);
-        int prevMapValue = 0; //fixme: how to stop warning about not being initilised?
-        Line2D prevGratPixelSys = new Line2D.Double();
-        
-        boolean first = true;
-        for (Graticule g : latGrats) {
-        	if (!first) {
-        		int deltaMapValue = Math.abs(g.realValue() - prevMapValue);
-        		double deltaPixelValue = (g.l.ptLineDist(prevGratPixelSys.getP1()) + (g.l.ptLineDist(prevGratPixelSys.getP2()))) / 2;
-        		
-        		double delta = deltaMapValue / deltaPixelValue;
-        		stats.addValue(delta);
-        	}else{
-        		first = false;
-        		prevMapValue = g.realValue();
-        		prevGratPixelSys = (Line2D) g.l.clone();
-        	}
-        }
-        
-        double y = stats.getMean();
-        if (debug)
-        	System.out.println("y range = " + (stats.getMax() - stats.getMin()));
-        stats.clear();
-        
-        first = true;
-        for (Graticule g : lonGrats) {
-        	if (!first) {
-        		int deltaMapValue = g.realValue() - prevMapValue;
-        		double deltaPixelValue = (g.l.ptLineDist(prevGratPixelSys.getP1()) + (g.l.ptLineDist(prevGratPixelSys.getP2()))) / 2;
-        		
-        		double delta = deltaMapValue / deltaPixelValue;
-        		stats.addValue(delta);
-        	}else{
-        		first = false;
-        		prevMapValue = g.realValue();
-        		prevGratPixelSys = (Line2D) g.l.clone();
-        	}
-        }
-        
-        double x = stats.getMean();
-        if (debug)
-        	System.out.println("x range = " + (stats.getMax() - stats.getMin()));
-        stats.clear();
-        
-        if (debug) {
-        	System.out.println("x = " + x);
-        	System.out.println("y = " + y);
-        }
-        
-        // C, F are translation terms: x, y map coordinates of the center of the upper-left pixel
-        for (Graticule g : latGrats) {
-            // find perp dist to pixel space 0,0
-        	Double perpPixelDist = g.l.ptLineDist(new Point2D.Double(0,0));
-        	
-        	// find the map space distance from this graticule to the center of the 0,0 pixel
-        	Double perpMapDist = perpPixelDist * y; // perpMapDist / perpPixelDist = y
-        	
-        	stats.addValue(perpMapDist);
-        }
-        
-        double F = stats.getMean();
-        F += originNorthing;
-        stats.clear();
-        
-        for (Graticule g : lonGrats) {
-        	// find perp dist to pixel space 0,0
-        	Double perpPixelDist = g.l.ptLineDist(new Point2D.Double(0,0));
-        	
-        	// find the map space distance from this graticule to the center of the 0,0 pixel
-        	Double perpMapDist = perpPixelDist * x; // perpMapDist / perpPixelDist = x
-        	
-        	stats.addValue(perpMapDist);
-        }
-        
-        double C = stats.getMean();
-        C += originEasting;
-        
-        stats.clear();
-        
-        
-        // calculate the affine transformation matrix elements
-        double D = -1 * x * unitsToMeters * Math.sin(theta);
-        double A = x * unitsToMeters * Math.cos(theta);
-        double B = y * unitsToMeters * Math.sin(phi); // if should be negative, it'll formed by negative sin
-        double E = -1 * y * unitsToMeters * Math.cos(phi);
+		/*
+		 * Line 1: A: pixel size in the x-direction in map units/pixel
+		 * Line 2: D: rotation about y-axis
+		 * Line 3: B: rotation about x-axis
+		 * Line 4: E: pixel size in the y-direction in map units, almost always negative[3]
+		 * Line 5: C: x-coordinate of the center of the upper left pixel
+		 * Line 6: F: y-coordinate of the center of the upper left pixel
+		 */
+		if (debug) {
+			System.out.println("A = " + A);
+			System.out.println("D = " + D);
+			System.out.println("B = " + B);
+			System.out.println("E = " + E);
+			System.out.println("C = " + C);
+			System.out.println("F = " + F);
 
-        /*
-         * Line 1: A: pixel size in the x-direction in map units/pixel
-         * Line 2: D: rotation about y-axis
-         * Line 3: B: rotation about x-axis
-         * Line 4: E: pixel size in the y-direction in map units, almost always negative[3]
-         * Line 5: C: x-coordinate of the center of the upper left pixel
-         * Line 6: F: y-coordinate of the center of the upper left pixel
-         */
-        if (debug) {
-	        System.out.println("A = " + A);
-	        System.out.println("D = " + D);
-	        System.out.println("B = " + B);
-	        System.out.println("E = " + E);
-	        System.out.println("C = " + C);
-	        System.out.println("F = " + F);
-	        
-	        // write the world file
-	        System.out.println();
-	        System.out.println("World File:");
-	        System.out.println(A);
-	        System.out.println(D);
-	        System.out.println(B);
-	        System.out.println(E);
-	        System.out.println(C);
-	        System.out.println(F);
-        }
-        
-        // write to the .wld file
-        wldWriter.write(A + "\n");
-        wldWriter.write(D + "\n");
-        wldWriter.write(B + "\n");
-        wldWriter.write(E + "\n");
-        wldWriter.write(C + "\n");
-        wldWriter.write(F + "\n");
-        
-        wldWriter.close();
+			// write the world file
+			System.out.println();
+			System.out.println("World File:");
+			System.out.println(A);
+			System.out.println(D);
+			System.out.println(B);
+			System.out.println(E);
+			System.out.println(C);
+			System.out.println(F);
+		}
+
+		// write to the .wld file
+		wldWriter.write(A + "\n");
+		wldWriter.write(D + "\n");
+		wldWriter.write(B + "\n");
+		wldWriter.write(E + "\n");
+		wldWriter.write(C + "\n");
+		wldWriter.write(F + "\n");
+
+		wldWriter.close();
 	}
 
 	/**
@@ -314,53 +327,53 @@ public class Main {
 	private static void readCSV(BufferedReader csvReader,
 			ArrayList<Graticule> lonGrats, ArrayList<Graticule> latGrats) throws Exception {
 
-        // chew the header line and check it is what we expect
-        String line = csvReader.readLine();
+		// chew the header line and check it is what we expect
+		String line = csvReader.readLine();
 
-        if (!line.equals("lonlat,dir,value,x1,y1,x2,y2"))
-        	System.exit(1);
+		if (!line.equals("lonlat,dir,value,x1,y1,x2,y2"))
+			System.exit(1);
 
-        // read each line of the CSV file and build our internal data structures
-        for (line = csvReader.readLine(); line != null; line = csvReader.readLine()) {
-        	String[] l = line.split(",");
-        	if (l.length != 7)
-        		throw new Exception("Source file has bad format. Each line should have 7 columns, but we found a line with " + l.length + "columns.");
+		// read each line of the CSV file and build our internal data structures
+		for (line = csvReader.readLine(); line != null; line = csvReader.readLine()) {
+			String[] l = line.split(",");
+			if (l.length != 7)
+				throw new Exception("Source file has bad format. Each line should have 7 columns, but we found a line with " + l.length + "columns.");
 
-        	LATLON latlon;
-        	if (l[0].equals("lon"))
-        		latlon = LATLON.LON;
-        	else if (l[0].equals("lat"))
-        		latlon = LATLON.LAT;
-        	else
-        		throw new Exception("Either 'lat' or 'lon' expected, found " + l[0]);
+			LATLON latlon;
+			if (l[0].equals("lon"))
+				latlon = LATLON.LON;
+			else if (l[0].equals("lat"))
+				latlon = LATLON.LAT;
+			else
+				throw new Exception("Either 'lat' or 'lon' expected, found " + l[0]);
 
-        	DIR dir;
-        	if (l[1].equals("w"))
-        		dir = DIR.W;
-        	else if (l[1].equals("e"))
-        		dir = DIR.E;
-        	else if (l[1].equals("n"))
-        		dir = DIR.N;
-        	else if (l[1].equals("s"))
-        		dir = DIR.S;
-        	else if (l[1].equals("v"))
-        		dir = DIR.E;
-        	else if (l[1].equals("h"))
-        		dir = DIR.N;
-        	else
-        		throw new Exception("Either n,s,e,w,h,v expected, found " + l[1]);
+			DIR dir;
+			if (l[1].equals("w"))
+				dir = DIR.W;
+			else if (l[1].equals("e"))
+				dir = DIR.E;
+			else if (l[1].equals("n"))
+				dir = DIR.N;
+			else if (l[1].equals("s"))
+				dir = DIR.S;
+			else if (l[1].equals("v"))
+				dir = DIR.E;
+			else if (l[1].equals("h"))
+				dir = DIR.N;
+			else
+				throw new Exception("Either n,s,e,w,h,v expected, found " + l[1]);
 
-        	Graticule graticule = new Graticule(latlon,
-        			dir,
-        			Integer.parseInt(l[2]),
-        			new Line2D.Float(Float.parseFloat(l[3]), Float.parseFloat(l[4]), Float.parseFloat(l[5]), Float.parseFloat(l[6])));
+			Graticule graticule = new Graticule(latlon,
+					dir,
+					Integer.parseInt(l[2]),
+					new Line2D.Float(Float.parseFloat(l[3]), Float.parseFloat(l[4]), Float.parseFloat(l[5]), Float.parseFloat(l[6])));
 
-        	if (latlon.equals(LATLON.LAT))
-        		latGrats.add(graticule);
-        	else
-        		lonGrats.add(graticule);
-        }
-		
+			if (latlon.equals(LATLON.LAT))
+				latGrats.add(graticule);
+			else
+				lonGrats.add(graticule);
+		}
+
 	}
 
 	private static void printUsage(int status) {
@@ -372,7 +385,7 @@ public class Main {
 		System.out.println("    -x, --originx     x component of projected coordinates of upper left pixel");
 		System.out.println("    -y, --originy     y component of projected coordinates of upper left pixel");
 		System.out.println("    -u, --tometers    multiplication factor to get source units into meters");
-		
+
 		System.exit(status);
 	}
 
